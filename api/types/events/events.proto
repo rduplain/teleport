@@ -530,7 +530,7 @@ message ResourceMetadata {
     google.protobuf.Timestamp Expires = 2 [
         (gogoproto.stdtime) = true,
         (gogoproto.nullable) = false,
-        (gogoproto.jsontag) = "expires"
+        (gogoproto.jsontag) = "expires,omitempty"
     ];
 
     // UpdatedBy if set indicates the user who modified the resource
