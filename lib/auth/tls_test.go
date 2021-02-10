@@ -913,7 +913,7 @@ func (s *TLSSuite) TestClusterConfig(c *check.C) {
 	testSuite := &suite.ServicesTestSuite{
 		ConfigS: clt,
 	}
-	testSuite.ClusterConfig(c, suite.SkipDelete())
+	testSuite.ClusterConfig(c)
 }
 
 func (s *TLSSuite) TestTunnelConnectionsCRUD(c *check.C) {
@@ -2920,7 +2920,7 @@ func (s *TLSSuite) TestEventsClusterConfig(c *check.C) {
 	err = s.server.Auth().SetClusterName(clusterName)
 	c.Assert(err, check.IsNil)
 
-	clusterNameResource, err = s.server.Auth().ClusterConfiguration.GetClusterName()
+	clusterNameResource, err = s.server.Auth().Services.ServerClusterConfiguration.GetClusterName()
 	c.Assert(err, check.IsNil)
 	suite.ExpectResource(c, w, 3*time.Second, clusterNameResource)
 }

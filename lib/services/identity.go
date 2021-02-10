@@ -51,6 +51,12 @@ type UsersService interface {
 	DeleteUser(ctx context.Context, user string) error
 	// GetUsers returns a list of users registered with the local auth server
 	GetUsers(withSecrets bool) ([]User, error)
+}
+
+// ServerUsers manages users on auth server
+type ServerUsers interface {
+	UsersService
+
 	// DeleteAllUsers deletes all users
 	DeleteAllUsers() error
 }
@@ -206,12 +212,43 @@ type Identity interface {
 
 	// GetResetPasswordTokenSecrets returns token secrets
 	GetResetPasswordTokenSecrets(ctx context.Context, tokenID string) (ResetPasswordTokenSecrets, error)
+}
 
-	types.WebSessionsGetter
-	types.WebTokensGetter
+// ServerIdentity represents the Identity on the auth server
+type ServerIdentity interface {
+	Identity
 
-	// AppSession defines application session features.
-	AppSession
+	ServerAppSession
+	ServerWebSessionsGetter
+	ServerWebTokensGetter
+}
+
+// ServerWebSessionsGetter manages web sessions on auth server
+type ServerWebSessionsGetter interface {
+	// WebSessions returns the web session manager
+	WebSessions() ServerWebSessions
+}
+
+// ServerWebSessions manages web sessions on the auth server
+type ServerWebSessions interface {
+	types.WebSessionInterface
+
+	// Upsert updates existing or inserts a new web session.
+	Upsert(ctx context.Context, session types.WebSession) error
+}
+
+// ServerWebTokensGetter manages web tokens on auth server
+type ServerWebTokensGetter interface {
+	// WebTokens returns the web token manager
+	WebTokens() ServerWebTokens
+}
+
+// ServerWebTokens manages web session on the auth server
+type ServerWebTokens interface {
+	types.WebTokenInterface
+
+	// Upsert updates existing or inserts a new web token.
+	Upsert(ctx context.Context, token types.WebToken) error
 }
 
 // AppSession defines application session features.
@@ -220,12 +257,18 @@ type AppSession interface {
 	GetAppSession(context.Context, GetAppSessionRequest) (WebSession, error)
 	// GetAppSessions gets all application web sessions.
 	GetAppSessions(context.Context) ([]WebSession, error)
-	// UpsertAppSession upserts and application web session.
-	UpsertAppSession(context.Context, WebSession) error
 	// DeleteAppSession removes an application web session.
 	DeleteAppSession(context.Context, DeleteAppSessionRequest) error
 	// DeleteAllAppSessions removes all application web sessions.
 	DeleteAllAppSessions(context.Context) error
+}
+
+// ServerAppSession manages application sessions on auth server
+type ServerAppSession interface {
+	AppSession
+
+	// UpsertAppSession upserts and application web session.
+	UpsertAppSession(context.Context, WebSession) error
 }
 
 // VerifyPassword makes sure password satisfies our requirements (relaxed),

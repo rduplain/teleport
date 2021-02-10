@@ -53,23 +53,26 @@ func (s *ClusterConfigurationSuite) TearDownTest(c *check.C) {
 }
 
 func (s *ClusterConfigurationSuite) TestAuthPreference(c *check.C) {
-	suite := &suite.ServicesTestSuite{
-		ConfigS: NewClusterConfigurationService(s.bk),
-	}
+	config := NewClusterConfigurationService(s.bk)
+	suite := suite.NewServerTestSuite(suite.ServerServicesTestSuite{
+		ConfigS: config,
+	})
 	suite.AuthPreference(c)
 }
 
 func (s *ClusterConfigurationSuite) TestClusterConfig(c *check.C) {
-	suite := &suite.ServicesTestSuite{
-		ConfigS: NewClusterConfigurationService(s.bk),
-	}
+	config := NewClusterConfigurationService(s.bk)
+	suite := suite.NewServerTestSuite(suite.ServerServicesTestSuite{
+		ConfigS: config,
+	})
 	suite.ClusterConfig(c)
 }
 
 func (s *ClusterConfigurationSuite) TestStaticTokens(c *check.C) {
-	suite := &suite.ServicesTestSuite{
-		ConfigS: NewClusterConfigurationService(s.bk),
-	}
+	config := NewClusterConfigurationService(s.bk)
+	suite := suite.NewServerTestSuite(suite.ServerServicesTestSuite{
+		ConfigS: config,
+	})
 	suite.StaticTokens(c)
 }
 

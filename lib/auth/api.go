@@ -46,14 +46,23 @@ type Announcer interface {
 	// or for the specified duration with second resolution if it's >= 1 second
 	UpsertKubeService(context.Context, services.Server) error
 
-	// NewKeepAliver returns a new instance of keep aliver
-	NewKeepAliver(ctx context.Context) (services.KeepAliver, error)
-
 	// UpsertAppServer adds an application server.
 	UpsertAppServer(context.Context, services.Server) (*services.KeepAlive, error)
 
 	// UpsertDatabaseServer registers a database proxy server.
 	UpsertDatabaseServer(context.Context, types.DatabaseServer) (*services.KeepAlive, error)
+}
+
+// ServerAnnouncer manages presence on auth server
+type ServerAnnouncer interface {
+	Announcer
+	keepAliver
+}
+
+// keepAliver creates new keep-alives
+type keepAliver interface {
+	// NewKeepAliver returns a new instance of keep aliver
+	NewKeepAliver(ctx context.Context) (types.KeepAliver, error)
 }
 
 // ReadAccessPoint is an API interface implemented by a certificate authority (CA)
@@ -147,13 +156,19 @@ type AccessPoint interface {
 	events.Streamer
 
 	// Semaphores provides semaphore operations
-	services.Semaphores
+	types.Semaphores
 
 	// UpsertTunnelConnection upserts tunnel connection
 	UpsertTunnelConnection(conn services.TunnelConnection) error
 
 	// DeleteTunnelConnection deletes tunnel connection
 	DeleteTunnelConnection(clusterName, connName string) error
+}
+
+// ClientAccessPoint represents client side AccessPoint
+type ClientAccessPoint interface {
+	AccessPoint
+	keepAliver
 }
 
 // AccessCache is a subset of the interface working on the certificate authorities
@@ -190,7 +205,7 @@ type Cache interface {
 }
 
 // NewWrapper returns new access point wrapper
-func NewWrapper(base AccessPoint, cache ReadAccessPoint) AccessPoint {
+func NewWrapper(base ClientAccessPoint, cache ReadAccessPoint) ClientAccessPoint {
 	return &Wrapper{
 		NoCache:         base,
 		ReadAccessPoint: cache,
@@ -201,7 +216,7 @@ func NewWrapper(base AccessPoint, cache ReadAccessPoint) AccessPoint {
 // so that reads of cached values can be intercepted.
 type Wrapper struct {
 	ReadAccessPoint
-	NoCache AccessPoint
+	NoCache ClientAccessPoint
 }
 
 // ResumeAuditStream resumes existing audit stream
@@ -299,7 +314,3 @@ type NewCachingAccessPoint func(clt ClientI, cacheName []string) (AccessPoint, e
 func NoCache(clt ClientI, cacheName []string) (AccessPoint, error) {
 	return clt, nil
 }
-
-// notImplementedMessage is the message to return for endpoints that are not
-// implemented. This is due to how service interfaces are used with Teleport.
-const notImplementedMessage = "not implemented: can only be called by auth locally"
