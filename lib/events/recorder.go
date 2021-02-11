@@ -143,7 +143,7 @@ func (r *ForwardRecorder) GetAuditLog() IAuditLog {
 }
 
 // EmitAuditEvent is not implemented
-// Events are forwarded to the auth server and is then emitted from there 
+// Events are forwarded to the auth server and is then emitted from there
 func (r *Forwarder) EmitAuditEvent(ctx context.Context, event AuditEvent) error {
 	return trace.NotImplemented("not implemented")
 }
