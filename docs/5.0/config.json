@@ -36,7 +36,7 @@
       ]
     },
     {
-      "icon": "building",
+      "icon": "database",
       "title": "Database Access",
       "entries": [
         { "title": "Getting Started", "slug": "/database-access/getting-started/" },
