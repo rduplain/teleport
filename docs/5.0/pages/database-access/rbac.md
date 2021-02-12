@@ -84,9 +84,9 @@ attempt.
 
 PostgreSQL supports multiple logical databases and each logical database can
 contain multiple schemas. In order to change to a different database, a user
-disconnects from the current one and establishes a new connection. When checked
-on a PostgreSQL connection attempt, `db_names` field refers to the names of the
-logical databases a user is allowed to connect to.
+disconnects from the current one and establishes a new connection. During a
+PostgreSQL connection attempt, `db_names` field is checked against the name
+of the logical database user is connecting to.
 
 In MySQL a logical "database" and a "schema" are synonyms for each other, and
 the scope of permissions a user has once connected is determined by the permission

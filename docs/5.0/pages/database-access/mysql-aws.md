@@ -1,88 +1,23 @@
 ---
-title: Database Access Configuration
-description: How to configure Teleport Database Access
+title: Database Access with MySQL on AWS
+description: How to configure Teleport Database Access with AWS RDS/Aurora MySQL
 ---
 
-# Database Access Configuration
+# MySQL on AWS
 
-## Self-Hosted PostgreSQL
-
-### Create Certificate/Key Pair
-
-Teleport uses mutual TLS for authentication to PostgreSQL instances. As such,
-self-hosted PostgreSQL instances must be configured with Teleport's certificate
-authority and a certificate/key pair that Teleport can validate.
-
-To create these secrets, use `tctl auth sign` command. Note that it requires a
-running Teleport cluster and [should be run](https://goteleport.com/teleport/docs/architecture/overview/#tctl)
-on the auth server.
-
-```sh
-# Export Teleport's certificate authority and generate certificate/key pair
-# for host db.example.com with a one year validity period.
-$ tctl auth sign --format=db --host=db.example.com --out=server --ttl=8760h
-```
-
-Flag descriptions:
-
-* `--format=db`: instructs the command to produce secrets in the format suitable
-  for configuring a database server.
-* `--host=db.example.com`: server name to encode in the certificate, should
-  match the hostname Teleport will be connecting to the database at.
-* `--out=server`: name prefix for output files.
-* `--ttl=8760h`: certificate validity period.
-
-The command will create 3 files: `server.cas` with Teleport's certificate
-authority and `server.crt`/`server.key` with generated certificate/key pair.
-
-!!! note "Certificate Rotation"
-
-    Teleport signs database certificates with the host authority. As such,
-    when performing [host certificates rotation](../admin-guide.md#certificate-rotation),
-    the database certificates must be updated as well.
-
-### Configure PostgreSQL Server
-
-To configure PostgreSQL server to accept TLS connections, add the following
-to PostgreSQL configuration file `postgresql.conf`:
-
-```conf
-ssl = on
-ssl_cert_file = '/path/to/server.crt'
-ssl_key_file = '/path/to/server.key'
-ssl_ca_file = '/path/toa/server.cas'
-```
-
-See [Secure TCP/IP Connections with SSL](https://www.postgresql.org/docs/current/ssl-tcp.html)
-in PostgreSQL documentation for more details.
-
-Additionally, PostgreSQL should be configured to require client certificate
-authentication from clients connecting over TLS. This can be done by adding
-the following entries to PostgreSQL host-based authentication file `pg_hba.conf`:
-
-```conf
-hostssl all             all             ::/0                    cert
-hostssl all             all             0.0.0.0/0               cert
-```
-
-See [The pg_hba.conf File](https://www.postgresql.org/docs/current/auth-pg-hba-conf.html)
-in PostgreSQL documentation for more details.
-
-## PostgreSQL on AWS
+## Enable IAM Authentication
 
 Teleport Database Access for AWS RDS and Aurora uses IAM authentication which
 can be enabled with the following steps.
 
-### Enable IAM Authentication
-
 Open [Amazon RDS console](https://console.aws.amazon.com/rds/) and create a new
 database instance with IAM authentication enabled, or modify an existing one to
-turn it on. Make sure to use PostgreSQL database type.
+turn it on. Make sure to use MySQL database type.
 
 See [Enabling and disabling IAM database authentication](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.Enabling.html)
 for more information.
 
-### Create IAM Policy
+## Create IAM Policy
 
 To allow Teleport database service to log into the database instance using auth
 token, create an IAM policy and attach it to the user whose credentials the
@@ -123,14 +58,13 @@ Parameters:
 See [Creating and using an IAM policy for IAM database access](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.IAMPolicy.html)
 for more information.
 
-### Create Database User
+## Create Database User
 
-Database users must have a `rds_iam` role in order to be allowed access. For
-PostgreSQL:
+Database accounts must have IAM authentication enabled in order to be allowed
+access. For MySQL:
 
 ```sql
-CREATE USER alice;
-GRANT rds_iam TO alice;
+CREATE USER alice IDENTIFIED WITH AWSAuthenticationPlugin AS 'RDS';
 ```
 
 See [Creating a database account using IAM authentication](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.DBAccounts.html)
@@ -165,13 +99,16 @@ auth_service:
   cluster_name: "test"
   listen_addr: 0.0.0.0:3025
   tokens:
-  - proxy,node,database:cbdeeab9-6f88-436d-a673-44d14bd86bb7
+  - proxy,node,db:cbdeeab9-6f88-436d-a673-44d14bd86bb7
 proxy_service:
   enabled: "yes"
   listen_addr: 0.0.0.0:3023
   web_listen_addr: 0.0.0.0:3080
   tunnel_listen_addr: 0.0.0.0:3024
   public_addr: teleport.example.com:3080
+  # MySQL proxy is listening on a separate port and needs to be enabled
+  # on the proxy server.
+  mysql_listen_addr: 0.0.0.0:3036
 ssh_service:
   enabled: "no"
 ```
@@ -192,10 +129,11 @@ $ teleport start --debug \
    --roles=db \
    --token=cbdeeab9-6f88-436d-a673-44d14bd86bb7 \
    --auth-server=teleport.example.com:3080 \
-   --db-name=test \
-   --db-protocol=postgres \
-   --db-uri=db.example.com:5432 \
-   --labels=env=test
+   --db-name=aurora \
+   --db-protocol=mysql \
+   --db-uri=mysql-aurora-instance-1.xxx.us-east-1.rds.amazonaws.com:3306 \
+   --db-aws-region=us-east-1 \
+   --labels=env=dev
 ```
 
 Note that the `--auth-server` flag must point to cluster's proxy endpoint
@@ -209,14 +147,14 @@ be generated for a database service:
 $ tctl tokens add \
     --type=db \
     --db-name=test \
-    --db-protocol=postgres \
-    --db-uri=db.example.com:5432
+    --db-protocol=mysql \
+    --db-uri=db.example.com:3306
 ```
 
 ### Start Database Service with Config File
 
 Below is an example of a database service configuration file that proxies
-a single AWS Aurora database:
+a single AWS Aurora MySQL database:
 
 ```yaml
 teleport:
@@ -237,17 +175,17 @@ db_service:
     # Name of the database proxy instance, used to reference in CLI.
   - name: "aurora"
     # Free-form description of the database proxy instance.
-    description: "AWS Aurora instance of PostgreSQL 13.0"
+    description: "AWS Aurora MySQL"
     # Database protocol.
-    protocol: "postgres"
+    protocol: "mysql"
     # Database address, example of a AWS Aurora endpoint in this case.
-    uri: "postgres-aurora-instance-1.xxx.us-east-1.rds.amazonaws.com:5432"
+    uri: "mysql-aurora-instance-1.xxx.us-east-1.rds.amazonaws.com:5432"
     # AWS specific configuration, only required for RDS and Aurora.
     aws:
       # Region the database is deployed in.
       region: us-east-1
     # Labels to assign to the database, used in RBAC.
-    labels:
+    static_labels:
       env: dev
 auth_service:
   enabled: "no"
@@ -273,7 +211,7 @@ $ teleport start --debug --config=/path/to/teleport-db.yaml
 
 When setting up Teleport database service with AWS RDS or Aurora, it must have
 an IAM role allowing it to connect to that particular database instance. An
-example of such a policy is shown in the [AWS RDS/Aurora](#aws-rdsaurora-postgresql)
+example of such a policy is shown in the [Create IAM Policy](#create-iam-policy)
 section above. See [Creating and using an IAM policy for IAM database access](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.IAMPolicy.html)
 in AWS documentation.
 
@@ -289,9 +227,9 @@ databases:
 ```sh
 $ tsh login --proxy=teleport.example.com:3080
 $ tsh db ls
-Name   Description Labels
------- ----------- --------
-aurora AWS Aurora  env=dev
+Name   Description      Labels
+------ ---------------- --------
+aurora AWS Aurora MySQL env=dev
 ```
 
 Note that you will only be able to see databases your role has access to. See
@@ -312,28 +250,29 @@ You can optionally specify the database name and the user to use by default
 when connecting to the database instance:
 
 ```sh
-$ tsh db login --db-user=postgres --db-name=postgres aurora
+$ tsh db login --db-user=root --db-name=mysql aurora
 ```
 
-When logging into a PostgreSQL database, `tsh` automatically configures a section
-in the [connection service file](https://www.postgresql.org/docs/current/libpq-pgservice.html)
-with the name of `<cluster-name>-<database-service-name>`.
+When logging into a MySQL database, `tsh` automatically configures a section
+in the [option file](https://dev.mysql.com/doc/refman/8.0/en/option-files.html)
+with the name of `client_<cluster-name>-<database-service-name>` which `mysql`
+client can refer to via "group suffix" flag.
 
 Suppose the cluster name is "root", then you can connect to the database using
-the following `psql` command:
+the following `mysql` command:
 
 ```sh
 # Use default database user/name.
-$ psql "service=root-aurora"
+$ mysql --defaults-group-suffix=_root-aurora
 # Specify database name/user explicitly.
-$ psql "service=root-aurora user=alice dbname=metrics"
+$ mysql --defaults-group-suffix=_root-aurora --user=alice --database=metrics
 ```
 
 To log out of the database and remove credentials:
 
 ```sh
-# Log out of a particular database instance.
+# Remove credentials for a particular database instance.
 $ tsh db logout aurora
-# Log out of all database instances.
+# Remove credentials for all database instances.
 $ tsh db logout
 ```
