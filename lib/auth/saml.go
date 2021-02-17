@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"compress/flate"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"io/ioutil"
 
@@ -347,7 +348,7 @@ func (a *Server) validateSAMLResponse(samlResponse string) (*samlAuthResponse, e
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	assertionInfo, err := provider.RetrieveAssertionInfo(samlResponse)
+	assertionInfo, err := retrieveAssertionInfo(provider, connector, samlResponse)
 	if err != nil {
 		return nil, trace.AccessDenied(
 			"received response with incorrect or missing attribute statements, please check the identity provider configuration to make sure that mappings for claims/attribute statements are set up correctly. <See: https://goteleport.com/teleport/docs/enterprise/sso/ssh-sso/>, failed to retrieve SAML assertion info from response: %v.", err)
@@ -442,4 +443,99 @@ func (a *Server) validateSAMLResponse(samlResponse string) (*samlAuthResponse, e
 	}
 
 	return re, nil
+}
+
+func getDecryptionCert(connector services.SAMLConnector) (*tls.Certificate, error) {
+	keypair := connector.GetAssertionKeyPair()
+	if keypair == nil {
+		return nil, trace.Errorf("no assertion keypair configured in SAML connector")
+	}
+
+	decryptCert, err := tls.X509KeyPair([]byte(keypair.Cert), []byte(keypair.PrivateKey))
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	return &decryptCert, nil
+}
+
+func retrieveAssertionInfo(provider *saml2.SAMLServiceProvider, connector services.SAMLConnector, encodedResponse string) (*saml2.AssertionInfo, error) {
+	assertionInfo := &saml2.AssertionInfo{
+		Values: make(saml2.Values),
+	}
+
+	response, err := provider.ValidateEncodedResponse(encodedResponse)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	assertions := response.Assertions
+	var decryptCert *tls.Certificate
+
+	if len(response.EncryptedAssertions) > 0 {
+		decryptCert, err = getDecryptionCert(connector)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+	}
+
+	for _, encryptedAssertion := range response.EncryptedAssertions {
+		assertion, err := encryptedAssertion.Decrypt(decryptCert)
+		if err != nil {
+			return nil, trace.WrapWithMessage(err, "failed to decrypt encrypted SAML assertion")
+		}
+
+		assertions = append(assertions, *assertion)
+	}
+
+	if len(assertions) == 0 {
+		return nil, trace.Wrap(saml2.ErrMissingAssertion)
+	}
+
+	assertion := &assertions[0]
+	assertionInfo.Assertions = assertions
+	assertionInfo.ResponseSignatureValidated = response.SignatureValidated
+
+	warningInfo, err := provider.VerifyAssertionConditions(assertion)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	subject := assertion.Subject
+	if subject == nil {
+		return nil, trace.Wrap(saml2.ErrMissingElement{Tag: saml2.SubjectTag})
+	}
+
+	nameID := subject.NameID
+	if nameID == nil {
+		return nil, trace.Wrap(saml2.ErrMissingElement{Tag: saml2.NameIdTag})
+	}
+
+	assertionInfo.NameID = nameID.Value
+
+	// Get the actual assertion attributes
+	attributeStatement := assertion.AttributeStatement
+	if attributeStatement == nil && !provider.AllowMissingAttributes {
+		return nil, trace.Wrap(saml2.ErrMissingElement{Tag: saml2.AttributeStatementTag})
+	}
+
+	if attributeStatement != nil {
+		for _, attribute := range attributeStatement.Attributes {
+			assertionInfo.Values[attribute.Name] = attribute
+		}
+	}
+
+	if assertion.AuthnStatement != nil {
+		if assertion.AuthnStatement.AuthnInstant != nil {
+			assertionInfo.AuthnInstant = assertion.AuthnStatement.AuthnInstant
+		}
+		if assertion.AuthnStatement.SessionNotOnOrAfter != nil {
+			assertionInfo.SessionNotOnOrAfter = assertion.AuthnStatement.SessionNotOnOrAfter
+		}
+
+		assertionInfo.SessionIndex = assertion.AuthnStatement.SessionIndex
+	}
+
+	assertionInfo.WarningInfo = warningInfo
+	return assertionInfo, nil
 }
