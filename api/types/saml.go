@@ -87,10 +87,10 @@ type SAMLConnector interface {
 	GetProvider() string
 	// SetProvider sets the identity provider.
 	SetProvider(string)
-	// GetAssertionKeyPair returns the key pair for SAML assertions.
-	GetAssertionKeyPair() *AssertionKeyPair
-	// SetAssertionKeyPair sets the key pair for SAML assertions.
-	SetAssertionKeyPair(k *AssertionKeyPair)
+	// GetEncryptionKeyPair returns the key pair for SAML assertions.
+	GetEncryptionKeyPair() *EncryptionKeyPair
+	// SetEncryptionKeyPair sets the key pair for SAML assertions.
+	SetEncryptionKeyPair(k *EncryptionKeyPair)
 }
 
 // NewSAMLConnector returns a new SAMLConnector based off a name and SAMLConnectorSpecV2.
@@ -383,14 +383,14 @@ func (o *SAMLConnectorV2) SetSigningKeyPair(k *SigningKeyPair) {
 	o.Spec.SigningKeyPair = k
 }
 
-// GetAssertionKeyPair returns the key pair for SAML assertions.
-func (o *SAMLConnectorV2) GetAssertionKeyPair() *AssertionKeyPair {
-	return o.Spec.AssertionKeyPair
+// GetEncryptionKeyPair returns the key pair for SAML assertions.
+func (o *SAMLConnectorV2) GetEncryptionKeyPair() *EncryptionKeyPair {
+	return o.Spec.EncryptionKeyPair
 }
 
-// SetAssertionKeyPair sets the key pair for SAML assertions.
-func (o *SAMLConnectorV2) SetAssertionKeyPair(k *AssertionKeyPair) {
-	o.Spec.AssertionKeyPair = k
+// SetEncryptionKeyPair sets the key pair for SAML assertions.
+func (o *SAMLConnectorV2) SetEncryptionKeyPair(k *EncryptionKeyPair) {
+	o.Spec.EncryptionKeyPair = k
 }
 
 // CheckAndSetDefaults checks and sets default values
@@ -453,8 +453,8 @@ type SAMLConnectorSpecV2 struct {
 	SigningKeyPair *SigningKeyPair `json:"signing_key_pair,omitempty"`
 	// Provider is the external identity provider.
 	Provider string `json:"provider,omitempty"`
-	// AssertionKeyPair is a key pair used for decryption SAML assertions.
-	AssertionKeyPair *AssertionKeyPair `json:"assertion_key_pair,omitempty"`
+	// EncryptionKeyPair is a key pair used for decryption SAML assertions.
+	EncryptionKeyPair *EncryptionKeyPair `json:"assertion_key_pair,omitempty"`
 }
 
 // AttributeMapping is SAML Attribute statement mapping
@@ -476,8 +476,8 @@ type SigningKeyPair struct {
 	Cert string `json:"cert"`
 }
 
-// AssertionKeyPair is a key pair used for decryption SAML assertions.
-type AssertionKeyPair struct {
+// EncryptionKeyPair is a key pair used for decryption SAML assertions.
+type EncryptionKeyPair struct {
 	// PrivateKey is PEM encoded x509 private key
 	PrivateKey string `json:"private_key"`
 	// Cert is certificate in OpenSSH authorized keys format

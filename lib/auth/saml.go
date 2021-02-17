@@ -446,9 +446,9 @@ func (a *Server) validateSAMLResponse(samlResponse string) (*samlAuthResponse, e
 }
 
 func getDecryptionCert(connector services.SAMLConnector) (*tls.Certificate, error) {
-	keypair := connector.GetAssertionKeyPair()
+	keypair := connector.GetEncryptionKeyPair()
 	if keypair == nil {
-		return nil, trace.Errorf("no assertion keypair configured in SAML connector")
+		return nil, trace.Errorf("no encryption keypair configured in SAML connector")
 	}
 
 	decryptCert, err := tls.X509KeyPair([]byte(keypair.Cert), []byte(keypair.PrivateKey))

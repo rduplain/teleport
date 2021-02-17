@@ -168,9 +168,9 @@ func GetSAMLServiceProvider(sc SAMLConnector, clock clockwork.Clock) (*saml2.SAM
 	}
 
 	encryptionKeyStore := signingKeyStore
-	assertionKeyPair := sc.GetAssertionKeyPair()
-	if assertionKeyPair != nil {
-		encryptionKeyStore, err = utils.ParseSigningKeyStorePEM(assertionKeyPair.PrivateKey, assertionKeyPair.Cert)
+	EncryptionKeyPair := sc.GetEncryptionKeyPair()
+	if EncryptionKeyPair != nil {
+		encryptionKeyStore, err = utils.ParseSigningKeyStorePEM(EncryptionKeyPair.PrivateKey, EncryptionKeyPair.Cert)
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}
